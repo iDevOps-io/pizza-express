@@ -54,7 +54,7 @@ jobs:
 
           npm install
 
-          npm test || echo "Unit Tests Failed"
+          npm test
 
       - name: "Helm: Apply Helm Chart"
         shell: bash
