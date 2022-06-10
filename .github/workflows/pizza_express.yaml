@@ -50,6 +50,8 @@ jobs:
         shell: bash
         run: |
 
+          docker run --name my-redis -p 6379:6379 -d redis
+
           npm install
 
           npm test || echo "Unit Tests Failed"
@@ -86,5 +88,7 @@ jobs:
           --set image.tag=${{ github.run_number }} \
           --set fullnameOverride=pizzaexpress
 
-          kubectl rollout status deployment/pizzaexpress -n pizza-express
+          kubectl rollout status deployment/pizzaexpress -n pizza-express 
+
+          kubectl get services -n pizza-express
 
