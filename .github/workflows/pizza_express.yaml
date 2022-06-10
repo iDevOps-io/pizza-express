@@ -90,5 +90,16 @@ jobs:
 
           kubectl rollout status deployment/pizzaexpress -n pizza-express 
 
-          kubectl get services -n pizza-express
+          echo "load_balancer_url=$(kubectl get services -n pizza-express  | grep -v NAME | cut -d ' ' -f 10)" >> ${GITHUB_ENV}
 
+      - name: "Create an CNAME record set"
+        uses: iDevOps-io/idevops-git-actions/route53@main
+        with:
+          aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws_route53_hosted_zone_id: ${{ secrets.ROUTE53_ZONEID }}
+          aws_route53_rr_action: "UPSERT"
+          aws_route53_rr_name: "pizzaexpress.idevops.io"
+          aws_route53_rr_type: "CNAME"
+          aws_route53_rr_ttl: "60"
+          aws_route53_rr_value: "${{ env.load_balancer_url }}"
