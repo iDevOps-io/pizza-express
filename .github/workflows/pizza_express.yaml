@@ -1,0 +1,90 @@
+name: "pizzaexpress"
+
+on:
+  push:
+    branches:
+      - 'main'
+      - 'pizza'
+
+jobs:
+  build_and_deploy:
+    name: "pizzaexpress"
+    runs-on: ${{ matrix.os }}
+    env:
+      k8s_cluster_name: "idevops-vaas-cluster"
+      aws_region : "us-west-2"
+
+    strategy:
+      matrix:
+        os: [ 'ubuntu-latest' ]
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.7'
+          architecture: 'x64'
+
+      - name: Use Node.js 14.x
+        uses: actions/setup-node@v3
+        with:
+          node-version: 14.x
+
+      - name: "Set Docker Image Name"
+        shell: bash
+        run: |
+          echo "docker_image_name=idevopsiointernal/pizzaexpress:${{ github.run_number }}" >> ${GITHUB_ENV}
+
+      - name: "Docker: Build & Push Docker Image"
+        uses: iDevOps-io/idevops-git-actions/docker-build-and-push@main
+        with:
+          docker_username: ${{ secrets.DOCKER_USERNAME }}
+          docker_password: ${{ secrets.DOCKER_PASSWORD }}
+          docker_org: "idevopsiointernal"
+          docker_image: "pizzaexpress"
+          docker_tag: "${{ github.run_number }}"
+          docker_file_location: "./"
+
+      - name: "Execute Unit: Tests"
+        shell: bash
+        run: |
+
+          npm install
+
+          npm test || echo "Unit Tests Failed"
+
+      - name: "Helm: Apply Helm Chart"
+        shell: bash
+        env:
+          AWS_DEFAULT_REGION: "${{ env.aws_region }}"
+          AWS_SECRET_ACCESS_KEY: "${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+          AWS_ACCESS_KEY_ID: "${{ secrets.AWS_ACCESS_KEY_ID }}"
+          INPUT_FILE: "deployment.yaml.template"
+          OUTPUT_FILE: "deployment.yaml"
+        run: |
+
+          pip install awscli
+
+          curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && \
+
+          curl -s -o aws-iam-authenticator https://s3.us-west-2.amazonaws.com/amazon-eks/1.21.2/2021-07-05/bin/darwin/amd64/aws-iam-authenticator && \
+
+          sudo cp kubectl /usr/bin/kubectl && \
+          sudo cp aws-iam-authenticator /usr/bin/aws-iam-authenticator && \
+
+          sudo chmod a+xX /usr/bin/aws-iam-authenticator && \
+          sudo chmod a+xX /usr/bin/kubectl
+
+          sudo curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+          aws eks update-kubeconfig --name ${k8s_cluster_name} --region ${aws_region}
+
+          helm upgrade pizzaexpress ./helm_chart --install -n pizza-express \
+          --create-namespace \
+          --set image.repository=idevopsiointernal/pizzaexpress \
+          --set image.tag=${{ github.run_number }} \
+          --set fullnameOverride=pizzaexpress
+
+          kubectl rollout status deployment/pizzaexpress -n pizza-express
+
