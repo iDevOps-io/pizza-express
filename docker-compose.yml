@@ -2,7 +2,7 @@ version: '3.6'
 services:
   web:
     build: .
-    image: juliashub/pizza-express:${TAG:-latest}
+    image: iDevOps-io/pizza-express:${TAG:-latest}
     ports:
     - "8081:3000"
     links:
